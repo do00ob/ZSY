@@ -1,5 +1,6 @@
 <template>
   <div>
+    <!--<el-backtop target=".page-component__scroll .el-scrollbar__wrap"></el-backtop>-->
     <div id="main"></div>
     <div id="averageRating"></div>
     <el-input placeholder="请输入店铺名称" v-model="storeUrl" class="input-with-select">
@@ -13,21 +14,43 @@
       </el-col>
     </el-row>-->
     <!--<el-checkbox v-model="checked">备选项</el-checkbox> -->
-    <el-row v-show="showCards">
-      <el-col :span="8" v-for="(o, index) in products" :key="o" :offset="index > 0 ? 2 : 0">
-        <el-card :body-style="{ padding: '0px' }">
-          <img :src="o.imgUrl" class="image">
-          <div style="padding: 14px;">
-            <span>{{ o.name }}</span>
-            <div class="bottom clearfix">
-              <time class="time">{{ o.price }}</time>
-              <el-button type="primary" class="button" icon="el-icon-search"
-                @click="() => paiLiTao(o.imgUrl)">搜同款</el-button>
+    <div class="container" v-show="showCards" v-loading="loading">
+      <el-button type="primary" class="buttonAnalyse" @click="analyse">数据分析<i
+          class="el-icon-s-marketing"></i></el-button>
+      <el-row class="main">
+        <el-col :span="10" v-for="(o, index) in products" :key="o" :offset="index % 2 > 0 ? 2 : 0">
+          <el-card shadow="hover" :body-style="{ padding: '0px' }" class="cardMode">
+            <img :src="o.imgUrl" class="image">
+            <div style="padding: 14px;">
+              <div class="nameFence">{{ o.name }}</div>
+              <div class="bottom clearfix">
+                <time class="time">{{ o.price }}</time>
+                <el-button type="primary" class="button" icon="el-icon-search"
+                  @click="() => paiLiTao(o.imgUrl)">搜同款</el-button>
+              </div>
             </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
+
+    <el-dialog title="数据分析" :visible.sync="dialogVisible" width="80%" :before-close="handleClose">
+      <div class="graphContainer">
+        <div id="showgraph1" class="showgraph"></div>
+        <div id="showgraph2" class="showgraph"></div>
+        <div id="showgraph3" class="showgraph"></div>
+        <div id="showgraph4" class="showgraph"></div>
+
+        <div id="showgraph5" class="showgraph_next"></div>
+      </div>
+      
+      <span slot="footer" class="dialog-footer" style="position: relative;">
+        <el-button type="primary" @click="nextPage" class="next" v-show="isNext">下一页</el-button>
+        <el-button @click="reset">取 消</el-button>
+        <el-button type="primary" @click="pb">确 定</el-button>
+      </span>
+    </el-dialog>
+
     <!--<el-button type="primary" style="margin-left: 16px" @click="change">
       打开
     </el-button>-->
@@ -35,7 +58,7 @@
     <el-drawer :visible.sync="drawer" title="I am the title" :with-header="false">
       <el-row>
         <el-col :span="8" v-for="(o, index) in products" :key="o" :offset="index > 0 ? 2 : 0">
-          <el-card :body-style="{ padding: '0px' }">
+          <el-card :body-style="{ padding: '10px' }">
             <img :src="o.imgUrl" class="image">
             <div style="padding: 14px;">
               <span>{{ o.name }}</span>
@@ -49,13 +72,16 @@
         </el-col>
       </el-row>
     </el-drawer>
+
   </div>
 
 </template>
 
+
 <script>
 import axios from 'axios';
 import * as echarts from 'echarts';
+import 'echarts-wordcloud';
 export default {
   name: 'HelloWorld',
   props: {
@@ -71,10 +97,15 @@ export default {
       products: [],
       findSameProducts: [],
       drawer: false,
-      showCards: false
+      showCards: false,
+      loading:false,
+      dialogVisible: false,
+      isNext : false,
+      keyWords:[]
     }
   },
   methods: {
+    
     change() {
       
       
@@ -140,59 +171,107 @@ export default {
       });
     },
     pc(){
-      this.showCards = true
-      //console.log(this.storeUrl)
-      this.products = this.combineArraysToObjectArray2(this.storeUrl,[this.rootStoreData[2], this.rootStoreData[0], this.rootStoreData[5],], "imgUrl", "name", "price")
-    },
-    pb(){ 
-          //console.log(response.data);
+      var updateOrAddObject = function(array, inputName) {
+      // 查找是否存在具有相同 name 的对象
+      const obj = array.find(item => item.name === inputName);
 
-          this.rootStoreData[12] = this.convertArrayToNumbers(this.rootStoreData[12])
-          console.log("销量", this.rootStoreData[12]);
-          /*this.rootStoreData = this.transposeArray(response.data.message);/*行列调换 */
-          console.log(this.rootStoreData)
-          var myChart = echarts.init(document.getElementById('main'));
-          var option = {
-            tooltip: {
-              trigger: 'item'
+      if (obj) {
+        // 如果对象已存在，增加其 value
+        obj.value += 1;
+      } else {
+        // 如果对象不存在，新增一个对象，value 为 1
+        array.push({ name: inputName, value: 1 });
+      }
+    }
+      if(this.storeUrl == ''){
+        this.$message({
+          showClose: true,
+          message: '请输入关键字',
+          type: 'warning'
+        });
+        return;
+      }
+      updateOrAddObject(this.keyWords,this.storeUrl)
+      this.showCards = true
+      this.products = this.combineArraysToObjectArray2(this.storeUrl, [this.rootStoreData[2], this.rootStoreData[0], this.rootStoreData[5],this.rootStoreData[6],this.rootStoreData[7],this.rootStoreData[12]], "imgUrl", "name", "price", "score","comments","sales")
+      this.$message({
+          showClose: true,
+          message: '搜索出'+this.products.length+'条相关条目',
+          type: 'success'
+        });
+      //console.log(this.products)
+    },
+    pb() {
+      this.products=[];
+      var ObjectArrayTocombineArrays = function (attribute, initialArray) {
+        var array = [];
+        for (let i = 0; i < initialArray.length; i++) {
+          var motoNum = initialArray[i][attribute].replace(/[a-zA-Z]/g, '')
+          array.push(Math.round(motoNum*100)/100)
+        }
+        return array
+      }
+      //console.log(response.data);
+      this.isNext = true
+      this.rootStoreData[12] = this.convertArrayToNumbers(this.rootStoreData[12])
+      //console.log("销量", this.rootStoreData[12]);
+      var ar_1 = ObjectArrayTocombineArrays("comments", this.products)
+      var ar_2 = ObjectArrayTocombineArrays("sales", this.products)
+      var ar_3 = ObjectArrayTocombineArrays("price", this.products)
+      var ar_4 = ObjectArrayTocombineArrays("score", this.products)
+      //console.log(this.products)
+      //console.log(ar_1)
+      /*this.rootStoreData = this.transposeArray(response.data.message);/*行列调换 */
+      //console.log(this.rootStoreData)
+      //var myChart = echarts.init(document.getElementById('showgraph'));
+      // eslint-disable-next-line
+      var option = {
+        tooltip: {
+          trigger: 'item'
+        },
+        legend: {
+          top: '5%',
+          left: 'center'
+        },
+        series: [
+          {
+            name: 'Access From',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+              borderRadius: 10,
+              borderColor: '#fff',
+              borderWidth: 2
             },
-            legend: {
-              top: '5%',
-              left: 'center'
+            label: {
+              show: false,
+              position: 'center'
             },
-            series: [
-              {
-                name: 'Access From',
-                type: 'pie',
-                radius: ['40%', '70%'],
-                avoidLabelOverlap: false,
-                itemStyle: {
-                  borderRadius: 10,
-                  borderColor: '#fff',
-                  borderWidth: 2
-                },
-                label: {
-                  show: false,
-                  position: 'center'
-                },
-                emphasis: {
-                  label: {
-                    show: true,
-                    fontSize: 40,
-                    fontWeight: 'bold'
-                  }
-                },
-                labelLine: {
-                  show: false
-                },
-                data: this.combineArraysToObjectArray([this.rootStoreData[0], this.rootStoreData[7]], "name", "value")
+            emphasis: {
+              label: {
+                show: true,
+                fontSize: 40,
+                fontWeight: 'bold'
               }
-            ]
-          };
-          // 绘制图表
-          myChart.setOption(option);
-          /*上面是第一个图*/
-          var mychart_2 = echarts.init(document.getElementById('averageRating'));
+            },
+            labelLine: {
+              show: false
+            },
+            data: this.combineArraysToObjectArray([this.rootStoreData[0], this.rootStoreData[7]], "name", "value")
+          }
+        ]
+      };
+    // 绘制图表
+    //myChart.setOption(option);
+    /*上面是第一个图*/
+    //var mychart_2 = echarts.init(document.getElementById('showgraph'));
+          //-----------------------------------------------
+          var chart_1 = echarts.init(document.getElementById('showgraph1'));
+          var chart_2 = echarts.init(document.getElementById('showgraph2'));
+          var chart_3 = echarts.init(document.getElementById('showgraph3'));
+          var chart_4 = echarts.init(document.getElementById('showgraph4'));
+          //-----------------------------------------------
           var optinon_2 = {
             tooltip: {
               trigger: 'axis',
@@ -226,15 +305,22 @@ export default {
                 name: '评论数',
                 type: 'bar',
                 stack: 'total',
+                itemStyle: {
+                  color: '#dede01'
+                },
                 label: {
-                  show: true
+                  show: true,
+                  precision: 1,
+                  position: 'right',
+                  valueAnimation: true,
+                  fontFamily: 'monospace'
                 },
                 emphasis: {
                   focus: 'series'
                 },
-                data: this.rootStoreData[7]
+                data: ar_1
               },
-              {
+              /*{
                 name: '销量',
                 type: 'bar',
                 stack: 'total',
@@ -244,12 +330,203 @@ export default {
                 emphasis: {
                   focus: 'series'
                 },
-                data: this.rootStoreData[12]
-              },
+                data: ar_1
+              },*/
             ]
 
           };
-          mychart_2.setOption(optinon_2)
+
+          var optinon_3 = {
+            tooltip: {
+              trigger: 'axis',
+              axisPointer: {
+                // Use axis to trigger tooltip
+                type: 'shadow' // 'shadow' as default; can also be 'line' or 'shadow'
+              }
+            },
+            legend: {},
+            grid: {
+              left: '3%',
+              right: '4%',
+              bottom: '3%',
+              containLabel: true
+            },
+            xAxis: {
+              type: 'value'
+            },
+            yAxis: {
+              axisLabel: {
+                formatter: function (value) {
+                  // 根据实际情况对标签进行处理，比如只显示前几个字符等
+                  return value.substring(0, 5) + '...';
+                }
+              },
+              type: 'category',
+              data: this.rootStoreData[0]
+            },
+            series: [
+              {
+                name: '销量',
+                type: 'bar',
+                stack: 'total',
+                itemStyle: {
+                  color: '#ee1122'
+                },
+                label: {
+                  show: true,
+                  precision: 1,
+                  position: 'right',
+                  valueAnimation: true,
+                  fontFamily: 'monospace'
+                },
+                emphasis: {
+                  focus: 'series'
+                },
+                data: ar_2
+              }
+            ],
+            graphic: {
+              elements: [
+                {
+                  type: 'text',
+                  right: 20,
+                  bottom: 60,
+                  style: {
+                    text: "单位:K",
+                    font: 'bolder 80px monospace',
+                    fill: 'rgba(100, 100, 100, 0.25)'
+                  },
+                  z: 100,
+                }
+              ]
+            }
+
+          };
+          var optinon_4 = {
+            tooltip: {
+              trigger: 'axis',
+              axisPointer: {
+                // Use axis to trigger tooltip
+                type: 'shadow' // 'shadow' as default; can also be 'line' or 'shadow'
+              }
+            },
+            legend: {},
+            grid: {
+              left: '3%',
+              right: '4%',
+              bottom: '3%',
+              containLabel: true
+            },
+            xAxis: {
+              type: 'value'
+            },
+            yAxis: {
+              axisLabel: {
+                formatter: function (value) {
+                  // 根据实际情况对标签进行处理，比如只显示前几个字符等
+                  return value.substring(0, 5) + '...';
+                }
+              },
+              type: 'category',
+              data: this.rootStoreData[0]
+            },
+            series: [
+              {
+                name: '价格',
+                type: 'bar',
+                stack: 'total',
+                emphasis: {
+                  focus: 'series'
+                },
+                data: ar_3,
+                itemStyle: {
+                  color: '#11de21'
+                },
+                label: {
+                  show: true,
+                  precision: 1,
+                  position: 'right',
+                  valueAnimation: true,
+                  fontFamily: 'monospace'
+                }
+              },
+              
+            ],
+            graphic: {
+              elements: [
+                {
+                  type: 'text',
+                  right: 20,
+                  bottom: 60,
+                  style: {
+                    text: "单位:RMB",
+                    font: 'bolder 80px monospace',
+                    fill: 'rgba(100, 100, 100, 0.25)'
+                  },
+                  z: 100,
+                }
+              ]
+            }
+
+          };
+          var optinon_5 = {
+            tooltip: {
+              trigger: 'axis',
+              axisPointer: {
+                // Use axis to trigger tooltip
+                type: 'shadow' // 'shadow' as default; can also be 'line' or 'shadow'
+              }
+            },
+            legend: {},
+            grid: {
+              left: '3%',
+              right: '4%',
+              bottom: '3%',
+              containLabel: true
+            },
+            xAxis: {
+              type: 'value',
+              max:5,
+              min:4.5
+            },
+            yAxis: {
+              axisLabel: {
+                formatter: function (value) {
+                  // 根据实际情况对标签进行处理，比如只显示前几个字符等
+                  return value.substring(0, 5) + '...';
+                }
+              },
+              type: 'category',
+              data: this.rootStoreData[0]
+            },
+            series: [
+              {
+                name: '评分',
+                type: 'bar',
+                stack: 'total',
+                itemStyle: {
+                  color: '#1212df'
+                },
+                label: {
+                  show: true,
+                  precision: 1,
+                  position: 'right',
+                  valueAnimation: true,
+                  fontFamily: 'monospace'
+                },
+                emphasis: {
+                  focus: 'series'
+                },
+                data: ar_4
+              }
+            ]
+
+          };
+          //mychart_2.setOption(optinon_2)
+          chart_1.setOption(optinon_2)
+          chart_2.setOption(optinon_3)
+          chart_3.setOption(optinon_4)
+          chart_4.setOption(optinon_5)
         },
     pa() {
       axios.post('http://127.0.0.1:5000/api/pa', { url: this.storeUrl })
@@ -372,7 +649,100 @@ export default {
 
 
       })
-    }
+    },
+    analyse(){
+      this.loading = true
+      this.dialogVisible = true
+      //this.pb();
+    },
+    reset(){
+      var dom_1 = document.getElementById('showgraph1');
+      var dom_2 = document.getElementById('showgraph2');
+      var dom_3 = document.getElementById('showgraph3');
+      var dom_4 = document.getElementById('showgraph4');
+      var dom_5 = document.getElementById('showgraph5');
+      dom_1.style.display = 'block';
+      dom_2.style.display = 'block';
+      dom_3.style.display = 'block';
+      dom_4.style.display = 'block';
+      dom_5.style.display = 'none';
+      this.dialogVisible = false;this.loading = false
+    },
+    nextPage(){
+      this.isNext = false;
+      var dom_1 = document.getElementById('showgraph1');
+      var dom_2 = document.getElementById('showgraph2');
+      var dom_3 = document.getElementById('showgraph3');
+      var dom_4 = document.getElementById('showgraph4');
+
+      var dom_5 = document.getElementById('showgraph5');
+
+      var chart1 = echarts.getInstanceByDom(dom_1);
+      var chart2 = echarts.getInstanceByDom(dom_2);
+      var chart3 = echarts.getInstanceByDom(dom_3);
+      var chart4 = echarts.getInstanceByDom(dom_4);
+      chart1.dispose();
+      chart2.dispose();
+      chart3.dispose();
+      chart4.dispose();
+      //console.log(dom_1);
+      dom_1.style.display = 'none';
+      dom_2.style.display = 'none';
+      dom_3.style.display = 'none';
+      dom_4.style.display = 'none';
+      console.log(dom_5)
+      console.log(1)
+      dom_5.style.display = 'block';
+
+      var option = {
+          backgroundColor: '#fff',
+          series: [
+            {
+              type: 'wordCloud',
+              sizeRange: [15, 70], // 用来调整字的大小范围
+              rotationRange: [0, 0],// 每个词旋转的角度范围和旋转的步进
+              rotationStep: 45,
+              gridSize: 10, // 用来调整词之间的距离
+              shape: 'pentagon',// shape这个属性虽然可配置，但是在词的数量不太多的时候，效果不明显，它会趋向于画一个椭圆
+              //位置的配置
+              width: '100%',
+              height: '100%',
+              drawOutOfBound: false,// 允许词太大的时候，超出画布的范围
+              layoutAnimation: true,// 布局的时候是否有动画
+              textStyle: {
+                normal: {
+                  // 颜色可以用一个函数来返回字符串，这里是随机色
+                  color: function () {
+                                return 'rgb(' + [
+                                    Math.round(Math.random() * 160),
+                                    Math.round(Math.random() * 160),
+                                    Math.round(Math.random() * 160)
+                                ].join(',') + ')';
+                            },
+                  fontFamily: 'sans-serif',
+                  fontWeight: '550'
+                }
+              },
+              //data格式是一个数组
+              data: this.keyWords
+            }
+          ]
+
+        };
+
+      var chart_5 = echarts.init(dom_5)
+      chart_5.setOption(option)
+    },
+    handleClose(done) {
+        this.$confirm('确认关闭？')
+        // eslint-disable-next-line
+          .then(_ => {
+            this.reset()
+            done();
+          })
+          // eslint-disable-next-line
+          .catch(_ => {});
+      }
   },
   mounted() {
     /*为了不反复请求服务器，这里弄一个假数据来测试 */
@@ -671,8 +1041,31 @@ export default {
         "//www.lazada.com.my/products/jobbie-peanut-butter-starter-kit-i407069604.html",
         "//www.lazada.com.my/products/jobbie-creamy-pure-peanut-butter-380g-i251398638.html"
       ]
+    
     ]
+    // eslint-disable-next-line
+    let keywords = [{"name":"男神","value":2.64},
+                            {"name":"好身材","value":4.03},
+                            {"name":"校草","value":24.95},
+                            {"name":"酷","value":4.04},
+                            {"name":"时尚","value":5.27},
+                            {"name":"阳光活力","value":5.80},
+                            {"name":"初恋","value":3.09},
+                            {"name":"英俊潇洒","value":24.71},
+                            {"name":"霸气","value":6.33},
+                            {"name":"腼腆","value":2.55},
+                            {"name":"蠢萌","value":3.88},
+                            {"name":"青春","value":8.04},
+                            {"name":"网红","value":5.87},
+                            {"name":"萌","value":6.97},
+                            {"name":"认真","value":2.53},
+                            {"name":"古典","value":2.49},
+                            {"name":"温柔","value":3.91},
+                            {"name":"有个性","value":3.25},
+                            {"name":"可爱","value":9.93},
+                            {"name":"幽默诙谐","value":3.65}]
     this.rootStoreData = message
+    //this.keyWords = keywords
     /*图片，文字等属性，组成一个个对象数组 */
     //this.products = this.combineArraysToObjectArray([this.rootStoreData[2], this.rootStoreData[0], this.rootStoreData[5],], "imgUrl", "name", "price")
     console.log(this.products);
@@ -718,11 +1111,15 @@ a {
 .time {
   font-size: 20px;
   color: #999;
+  position: absolute;
+  left: 15%;
+  top: 30%;
 }
 
 .bottom {
   margin-top: 13px;
   line-height: 12px;
+  position: relative;
 }
 
 .button {
@@ -743,4 +1140,58 @@ a {
 .clearfix:after {
   clear: both
 }
+
+.main{
+  width: 80%;
+  margin: 0 auto;
+}
+.container{
+  background-color: #f5f5dc;
+  width: 80%;
+  margin: 0 auto;
+  position: relative;
+}
+.nameFence{
+  height: 45px;
+}
+.cardMode{
+  padding: 5px;
+  margin-top: 10px;
+}
+.el-card {
+    box-shadow: 5px 15px 20px rgba(0, 0, 0, 0.2); /* 自定义阴影大小 */
+}
+.buttonAnalyse{
+  position: absolute;
+  right: 5px;
+  top: 5px;
+}
+.showgraph{
+  width: 300px;
+  height: 200px;
+  margin: 0;
+  padding: 0;
+  /*background: #42b983;*/
+
+  flex: 1 1 50%;
+  height: 50%;
+}
+#showgraph1{
+  
+}
+.graphContainer{
+  display: flex;
+  flex-wrap: wrap;
+  height: 100vh;
+}
+
+.showgraph_next{
+  width: 1200px;
+  height: 800px;
+  margin: 0;
+  padding: 0;
+  background-color: aqua;
+  display: none;
+}
+
 </style>

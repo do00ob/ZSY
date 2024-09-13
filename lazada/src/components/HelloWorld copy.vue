@@ -12,6 +12,7 @@
 <script>
 import axios from 'axios';
 import * as echarts from 'echarts';
+import 'echarts-wordcloud';
 export default {
   name: 'HelloWorld',
   props: {
